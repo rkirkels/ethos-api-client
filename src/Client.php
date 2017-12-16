@@ -25,9 +25,12 @@ class Client
         }
 
         // Calculate the cache file's age in minutes
-        $fileTime = new \DateTime();
-        $fileTime->setTimestamp(filemtime('/tmp/minerdata_' . $this->panelId . '.json'));
-        $fileAge = $fileTime->diff(new \DateTime())->i;
+        if (file_exists('/tmp/minerdata_' . $this->panelId . '.json')) {
+            $fileTime = new \DateTime();
+            $fileTime->setTimestamp(filemtime('/tmp/minerdata_' . $this->panelId . '.json'));
+            $fileAge = $fileTime->diff(new \DateTime())->i;
+        }
+
 
         if (file_exists('/tmp/minerdata_' . $this->panelId . '.json') && $fileAge < ($this->cacheTime/60) + 1) {
             return json_decode(file_get_contents('/tmp/minerdata_' . $this->panelId . '.json'));
