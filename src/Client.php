@@ -7,6 +7,7 @@ define('ETHOS_HOST','ethosdistro.com');
 class Client
 {
     protected $panelId;
+    protected $cacheTime = 300; // Default cache time is 5 minutes
 
     public function __construct($panelId = null) {
         if (!is_null($panelId)) {
@@ -18,14 +19,32 @@ class Client
         $this->panelId = $panelId;
     }
 
-    public function getStats() {
-        $miners = [];
+    protected function getData() {
+        if (is_null($this->panelId)) {
+            throw new \Exception('No panel ID set.');
+        }
+
+        // Calculate the cache file's age in minutes
+        $fileTime = new \DateTime();
+        $fileTime->setTimestamp(filemtime('/tmp/minerdata_' . $this->panelId . '.json'));
+        $fileAge = $fileTime->diff(new \DateTime())->i;
+
+        if (file_exists('/tmp/minerdata_' . $this->panelId . '.json') && $fileAge < ($this->cacheTime/60) + 1) {
+            return json_decode(file_get_contents('/tmp/minerdata_' . $this->panelId . '.json'));
+        }
+
         $client = new \GuzzleHttp\Client();
         $url = 'http://' .$this->panelId . '.' . ETHOS_HOST;
         $res = $client->request('get', $url, [
             'query' => ['json' => 'yes']
         ]);
-        $data = json_decode((string) $res->getBody());
+        file_put_contents('/tmp/minerdata_' . $this->panelId . '.json', (string) $res->getBody());
+        return json_decode((string) $res->getBody());
+    }
+
+    public function getStats() {
+        $miners = [];
+        $data = $this->getData();
 
         foreach ($data->rigs as $ethosId => $minerData) {
             $miner = new Miner();
@@ -64,4 +83,57 @@ class Client
         }
         return $miners;
     }
+
+    public function scanGpus(string $ethosId) {
+        $data = $this->getData();
+
+        $gpuStrings = explode(PHP_EOL, $data->rigs->$ethosId->meminfo);
+        $gpuFanspeeds = explode(' ', $data->rigs->$ethosId->fanrpm);
+        $gpuHashrates = explode(' ', $data->rigs->$ethosId->miner_hashes);
+        $gpuTemperatures = explode(' ', $data->rigs->$ethosId->temp);
+        $gpuPower = explode(' ', $data->rigs->$ethosId->watts);
+        $gpuCores = explode(' ', $data->rigs->$ethosId->core);
+        $gpuMems = explode(' ', $data->rigs->$ethosId->mem);
+        $gpuVramSizes = explode(' ', $data->rigs->$ethosId->vramsize);
+        $gpus = [];
+        foreach ($gpuStrings as $gpuString) {
+            $gpuInfo = explode(':', $gpuString);
+            $gpu = new \stdClass();
+            $gpu->type = $gpuInfo[3];
+            $gpu->bios = $gpuInfo[4];
+            $gpus[] = $gpu;
+        }
+        foreach ($gpus as $id => $gpu) {
+            $gpus[$id]->fanRpm = intval($gpuFanspeeds[$id]);
+            $gpus[$id]->hashRate = floatval($gpuHashrates[$id]);
+            $gpus[$id]->temperature = intval($gpuTemperatures[$id]);
+            $gpus[$id]->power = floatval($gpuPower[$id]);
+            $gpus[$id]->core = intval($gpuCores[$id]);
+            $gpus[$id]->mem = intval($gpuMems[$id]);
+            $gpus[$id]->vramSize = floatval($gpuVramSizes[$id]);
+        }
+        return $gpus;
+    }
+
+    public function getTotalHashrate() {
+        $data = $this->getData();
+        return $data->total_hash;
+    }
+    /**
+     * @return int
+     */
+    public function getCacheTime(): int
+    {
+        return $this->cacheTime;
+    }
+
+    /**
+     * @param int $cacheTime
+     */
+    public function setCacheTime(int $cacheTime): void
+    {
+        $this->cacheTime = $cacheTime;
+    }
+
+
 }
