@@ -87,6 +87,15 @@ class Client
         return $miners;
     }
 
+    public function getStatsByMiner($ethosId) {
+        $data = $this->getData();
+        foreach ($data->rigs as $id => $minerData) {
+            if ($id == $ethosId) {
+                $miner = new Miner();
+            }
+        }
+    }
+
     public function scanGpus(string $ethosId) {
         $data = $this->getData();
 
@@ -118,10 +127,32 @@ class Client
         return $gpus;
     }
 
+    public function scanMiner($ethosId, $panelId = null) {
+        if (is_null($panelId)) {
+            $this->panelId = $ethosId;
+        }
+        else {
+            $this->panelId = $panelId;
+        }
+        $data = $this->getData();
+        if (!isset($data->rigs->$ethosId)) {
+            throw new \Exception('Miner with ethOS ID ' . $ethosId . ' couldn\'t be found.');
+        }
+        $minerData = $data->rigs->$ethosId;
+        $miner = new Miner();
+        $miner->setMotherboard($minerData->mobo);
+        $miner->setTotalRam($minerData->ram);
+        $miner->setLanChip($minerData->lan_chip);
+        $miner->setDriveName($minerData->drive_name);
+        $miner->setTotalHashrate($minerData->hash);
+        return $miner;
+    }
+
     public function getTotalHashrate() {
         $data = $this->getData();
         return $data->total_hash;
     }
+
     /**
      * @return int
      */

@@ -159,5 +159,34 @@ class Miner
         $this->totalHashrate = $totalHashrate;
     }
 
+    protected function getData() {
+        if (is_null($this->panelId)) {
+            throw new \Exception('No panel ID set.');
+        }
 
+        // Calculate the cache file's age in minutes
+        if (file_exists('/tmp/minerdata_' . $this->panelId . '.json')) {
+            $fileTime = new \DateTime();
+            $fileTime->setTimestamp(filemtime('/tmp/minerdata_' . $this->panelId . '.json'));
+            $fileAge = $fileTime->diff(new \DateTime())->i;
+        }
+
+
+        if (file_exists('/tmp/minerdata_' . $this->panelId . '.json') && $fileAge < ($this->cacheTime/60) + 1) {
+            return json_decode(file_get_contents('/tmp/minerdata_' . $this->panelId . '.json'));
+        }
+
+        $client = new \GuzzleHttp\Client();
+        $url = 'http://' .$this->panelId . '.' . ETHOS_HOST;
+        $res = $client->request('get', $url, [
+            'query' => ['json' => 'yes']
+        ]);
+        file_put_contents('/tmp/minerdata_' . $this->panelId . '.json', (string) $res->getBody());
+        return json_decode((string) $res->getBody());
+    }
+
+    public function getHashrate() {
+        $data = $this->getData();
+        var_dump($data);die;
+    }
 }
